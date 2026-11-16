@@ -1,0 +1,63 @@
+name: securesight-ai
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-securesight}
+      POSTGRES_USER: ${POSTGRES_USER:-securesight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_change_this}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-securesight} -d ${POSTGRES_DB:-securesight}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://securesight:local_dev_change_this@db:5432/securesight}
+      JWT_SECRET: ${JWT_SECRET:-replace_with_a_random_secret_at_least_32_chars}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+      SEED_DEMO: ${SEED_DEMO:-true}
+      SEED_DEMO_USERNAME: ${SEED_DEMO_USERNAME:-Supriya}
+      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-20}
+      AI_MAX_OUTPUT_TOKENS: ${AI_MAX_OUTPUT_TOKENS:-400}
+      AI_MAX_REQUESTS_PER_HOUR: ${AI_MAX_REQUESTS_PER_HOUR:-30}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    ports:
+      - "9005:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
